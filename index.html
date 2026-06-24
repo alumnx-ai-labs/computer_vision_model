@@ -3,41 +3,181 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Object Detector</title>
+<title>Live Object Detector</title>
 <style>
-  body { font-family: sans-serif; text-align: center; margin: 0; padding: 16px; background: #111; color: #eee; }
-  h2 { margin: 8px 0 16px; }
-  #webcam-container { display: flex; justify-content: center; margin-bottom: 16px; }
-  #webcam-container canvas { border-radius: 8px; max-width: 100%; }
-  button { font-size: 16px; padding: 10px 24px; border-radius: 8px; border: none; background: #2563eb; color: #fff; margin: 4px; }
-  button:disabled { background: #555; }
-  #label-container div { margin: 6px auto; max-width: 320px; text-align: left; }
-  .bar-bg { background: #333; border-radius: 6px; height: 18px; position: relative; overflow: hidden; }
-  .bar-fill { background: #22c55e; height: 100%; }
-  .bar-text { position: absolute; left: 8px; top: 0; font-size: 13px; line-height: 18px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+
+  .header { text-align: center; margin-bottom: 24px; }
+  .header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #60a5fa, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header p { font-size: 13px; color: #94a3b8; margin-top: 6px; }
+
+  .card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 20px;
+    padding: 20px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    backdrop-filter: blur(10px);
+  }
+
+  .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 18px; }
+  button {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 20px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #start-btn { background: linear-gradient(90deg, #2563eb, #3b82f6); color: #fff; }
+  #start-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(37,99,235,0.4); }
+  #flip-btn { background: rgba(148,163,184,0.15); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.25); }
+  #flip-btn:hover:not(:disabled) { background: rgba(148,163,184,0.25); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #webcam-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #000;
+    position: relative;
+    min-height: 200px;
+    align-items: center;
+  }
+  #webcam-container canvas { display: block; max-width: 100%; }
+  .placeholder { color: #64748b; font-size: 14px; padding: 60px 20px; }
+
+  #status-pill {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  #status-pill .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e;
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .results-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #94a3b8;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .pred-row {
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+  }
+  .pred-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .pred-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .pred-name .rank {
+    font-size: 11px;
+    background: rgba(148,163,184,0.2);
+    border-radius: 6px;
+    padding: 2px 7px;
+    color: #cbd5e1;
+  }
+  .pred-pct { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .bar-bg {
+    background: rgba(148,163,184,0.12);
+    border-radius: 999px;
+    height: 12px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.25s ease;
+    background: linear-gradient(90deg, #475569, #64748b);
+  }
+
+  /* Top prediction highlight */
+  .pred-row.top .pred-name { color: #34d399; }
+  .pred-row.top .pred-pct { color: #34d399; }
+  .pred-row.top .bar-fill { background: linear-gradient(90deg, #22c55e, #34d399); box-shadow: 0 0 12px rgba(52,211,153,0.5); }
+  .pred-row.top { transform: scale(1.01); }
 </style>
 </head>
 <body>
 
-<h2>Live Object Detector</h2>
-<button id="start-btn" type="button">Start Camera</button>
-<button id="flip-btn" type="button" disabled>Flip Camera</button>
-<div id="webcam-container"></div>
-<div id="label-container"></div>
+<div class="header">
+  <h1>Live Object Detector</h1>
+  <p>Real-time classification powered by Teachable Machine</p>
+</div>
+
+<div class="card">
+  <div class="controls">
+    <button id="start-btn" type="button">▶ Start Camera</button>
+    <button id="flip-btn" type="button" disabled>⟲ Flip Camera</button>
+  </div>
+
+  <div id="webcam-container">
+    <div class="placeholder">Camera preview will appear here</div>
+    <div id="status-pill"><span class="dot"></span>LIVE</div>
+  </div>
+
+  <div class="results-title">Predictions</div>
+  <div id="label-container"></div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 <script>
-  // Your Teachable Machine model link
-  const URL = "https://teachablemachine.withgoogle.com/models/oPYBH87as/";
+  const URL = "https://teachablemachine.withgoogle.com/models/t5zu5wO0u/";
 
   let model, webcam, labelContainer, maxPredictions;
-  let facingMode = "environment"; // back camera by default on phones
+  let facingMode = "environment";
   let loopId;
 
   async function init() {
-    document.getElementById("start-btn").disabled = true;
-    document.getElementById("start-btn").innerText = "Loading model...";
+    const startBtn = document.getElementById("start-btn");
+    startBtn.disabled = true;
+    startBtn.innerText = "Loading model...";
 
     const modelURL = URL + "model.json";
     const metadataURL = URL + "metadata.json";
@@ -51,16 +191,20 @@
     await webcam.play();
     window.requestAnimationFrame(loop);
 
-    document.getElementById("webcam-container").innerHTML = "";
-    document.getElementById("webcam-container").appendChild(webcam.canvas);
+    const wc = document.getElementById("webcam-container");
+    wc.innerHTML = '<div id="status-pill"><span class="dot"></span>LIVE</div>';
+    wc.appendChild(webcam.canvas);
+    document.getElementById("status-pill").style.display = "flex";
 
     labelContainer = document.getElementById("label-container");
     labelContainer.innerHTML = "";
     for (let i = 0; i < maxPredictions; i++) {
-      labelContainer.appendChild(document.createElement("div"));
+      const row = document.createElement("div");
+      row.className = "pred-row";
+      labelContainer.appendChild(row);
     }
 
-    document.getElementById("start-btn").innerText = "Running";
+    startBtn.innerText = "● Running";
     document.getElementById("flip-btn").disabled = false;
   }
 
@@ -76,9 +220,16 @@
     for (let i = 0; i < maxPredictions; i++) {
       const p = prediction[i];
       const pct = (p.probability * 100).toFixed(1);
-      labelContainer.childNodes[i].innerHTML =
-        `<div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div>
-         <div class="bar-text">${p.className}: ${pct}%</div></div>`;
+      const row = labelContainer.childNodes[i];
+      row.className = "pred-row" + (i === 0 ? " top" : "");
+      row.innerHTML = `
+        <div class="pred-head">
+          <span class="pred-name">
+            <span class="rank">#${i + 1}</span>${p.className}
+          </span>
+          <span class="pred-pct">${pct}%</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>`;
     }
   }
 
@@ -91,8 +242,9 @@
     webcam = new tmImage.Webcam(320, 320, true);
     await webcam.setup({ facingMode: facingMode });
     await webcam.play();
-    document.getElementById("webcam-container").innerHTML = "";
-    document.getElementById("webcam-container").appendChild(webcam.canvas);
+    const wc = document.getElementById("webcam-container");
+    wc.innerHTML = '<div id="status-pill" style="display:flex"><span class="dot"></span>LIVE</div>';
+    wc.appendChild(webcam.canvas);
     window.requestAnimationFrame(loop);
   }
 
